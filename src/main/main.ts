@@ -425,7 +425,31 @@ async function createWindow(): Promise<void> {
   });
 
   mainWindow.on('closed', () => {
+    if (process.platform === 'darwin') {
+      globalShortcut.unregister('Command+Q');
+      globalShortcut.unregister('Command+W');
+    }
     mainWindow = null;
+  });
+
+  mainWindow.on('focus', () => {
+    if (process.platform === 'darwin') {
+      globalShortcut.register('Command+Q', () => {
+        app.quit();
+      });
+      globalShortcut.register('Command+W', () => {
+        if (mainWindow) {
+          mainWindow.hide();
+        }
+      });
+    }
+  });
+
+  mainWindow.on('blur', () => {
+    if (process.platform === 'darwin') {
+      globalShortcut.unregister('Command+Q');
+      globalShortcut.unregister('Command+W');
+    }
   });
 
   // Handle external links
@@ -782,18 +806,6 @@ app.whenReady().then(async () => {
   await initializeSessions();
   await createWindow();
   createTray();
-
-  // Register global shortcuts so Cmd+Q/Cmd+W work even when webview has focus
-  if (process.platform === 'darwin') {
-    globalShortcut.register('Command+Q', () => {
-      app.quit();
-    });
-    globalShortcut.register('Command+W', () => {
-      if (mainWindow) {
-        mainWindow.hide();
-      }
-    });
-  }
 });
 
 // Unregister shortcuts on quit
