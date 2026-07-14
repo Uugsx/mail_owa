@@ -99,12 +99,60 @@ const mainWorldCode = `
           isTabActive = active;
           console.log('👁️ Main world visibility updated:', active ? 'visible' : 'hidden');
           
+          if (active) {
+            flushRaf();
+          }
+
           // Dispatch visibilitychange event
           const ev = new Event('visibilitychange', { bubbles: true });
           document.dispatchEvent(ev);
         }
       }
     });
+
+    // D. requestAnimationFrame throttling to freeze custom background loops
+    let activeRafCallbacks = new Map();
+    let nextRafId = 1;
+    const _origRaf = window.requestAnimationFrame;
+    const _origCancelRaf = window.cancelAnimationFrame;
+
+    window.requestAnimationFrame = function(callback) {
+      if (!isTabActive) {
+        const fakeId = nextRafId++;
+        const timeoutId = setTimeout(() => {
+          if (activeRafCallbacks.has(fakeId)) {
+            activeRafCallbacks.delete(fakeId);
+            try { callback(performance.now()); } catch (e) {}
+          }
+        }, 2000); // 0.5 FPS in background
+        activeRafCallbacks.set(fakeId, { type: 'timeout', id: timeoutId, callback });
+        return fakeId;
+      }
+      return _origRaf.call(window, callback);
+    };
+
+    window.cancelAnimationFrame = function(id) {
+      if (activeRafCallbacks.has(id)) {
+        const entry = activeRafCallbacks.get(id);
+        if (entry.type === 'timeout') {
+          clearTimeout(entry.id);
+        }
+        activeRafCallbacks.delete(id);
+        return;
+      }
+      return _origCancelRaf.call(window, id);
+    };
+
+    function flushRaf() {
+      const callbacks = Array.from(activeRafCallbacks.values());
+      activeRafCallbacks.clear();
+      callbacks.forEach(entry => {
+        if (entry.type === 'timeout') {
+          clearTimeout(entry.id);
+        }
+        try { _origRaf.call(window, entry.callback); } catch (e) {}
+      });
+    }
   })();
 `;
 
