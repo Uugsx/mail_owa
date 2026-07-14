@@ -212,7 +212,7 @@ function autoFillPassword(): void {
       console.log('🔑 Found password field, attempting auto-fill');
       
       // Get account info from parent window
-      if (typeof window !== 'undefined' && window.parent) {
+      if (typeof window !== 'undefined' && window.parent && window.parent !== window) {
         window.parent.postMessage({
           type: 'webview-message',
           channel: 'get-account-info',
@@ -307,8 +307,9 @@ function detectUnreadCount(): void {
             let sibling = el.nextElementSibling;
             while (sibling) {
               const sibText = (sibling.textContent || '').trim();
-              if (sibText && /^\d+$/.test(sibText)) {
-                const num = parseInt(sibText, 10);
+              const match = sibText.match(/^(\d+)(?:\s*[\/|of]\s*\d+)?$/i);
+              if (match) {
+                const num = parseInt(match[1], 10);
                 if (!isNaN(num) && num > 0) {
                   unreadCount = Math.max(unreadCount, num);
                   break;
@@ -324,8 +325,9 @@ function detectUnreadCount(): void {
               for (const child of children) {
                 if (child === el || child.contains(el)) continue;
                 const childText = (child.textContent || '').trim();
-                if (childText && /^\d+$/.test(childText)) {
-                  const num = parseInt(childText, 10);
+                const match = childText.match(/^(\d+)(?:\s*[\/|of]\s*\d+)?$/i);
+                if (match) {
+                  const num = parseInt(match[1], 10);
                   if (!isNaN(num) && num > 0) {
                     unreadCount = Math.max(unreadCount, num);
                   }
@@ -400,7 +402,7 @@ function detectUnreadCount(): void {
     } catch {}
     try { ipcRenderer.sendToHost('unread-count', { accountId, count: unreadCount }); } catch {}
     try {
-      if (typeof window !== 'undefined' && window.parent && accountId) {
+      if (typeof window !== 'undefined' && window.parent && window.parent !== window && accountId) {
         window.parent.postMessage({
           type: 'webview-message',
           channel: 'unread-count',
@@ -621,7 +623,7 @@ console.error = function(...args) {
 window.addEventListener('message', (event) => {
   if (event.data && event.data.type === 'webview-message') {
     // Forward the message to the parent window
-    if (typeof window !== 'undefined' && window.parent) {
+    if (typeof window !== 'undefined' && window.parent && window.parent !== window) {
       window.parent.postMessage(event.data, '*');
     }
   }
@@ -701,7 +703,7 @@ document.addEventListener('DOMContentLoaded', () => {
             try { if (accountId) ipcRenderer.send('webview:unread-count', accountId, count); } catch {}
             try { ipcRenderer.sendToHost('unread-count', { accountId, count }); } catch {}
             try {
-              if (typeof window !== 'undefined' && window.parent && accountId) {
+              if (typeof window !== 'undefined' && window.parent && window.parent !== window && accountId) {
                 window.parent.postMessage({ type: 'webview-message', channel: 'unread-count', data: count, accountId }, '*');
               }
             } catch {}

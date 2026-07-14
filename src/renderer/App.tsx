@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { AccountMeta } from '../main/types';
 import Sidebar from './components/Sidebar';
 import WebviewPane from './components/WebviewPane';
@@ -19,6 +19,43 @@ const AppContent: React.FC = () => {
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [editingAccount, setEditingAccount] = useState<AccountMeta | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+
+  const handleUnreadCountUpdate = useCallback((accountId: string, count: number) => {
+    console.log(`📊 Unread count for account ${accountId}: ${count}`);
+
+    setAccounts(prev => {
+      const currentAccount = prev.find(acc => acc.id === accountId);
+      if (currentAccount) {
+        const previousCount = currentAccount.unreadCount || 0;
+        if (count > previousCount) {
+          const accountName = currentAccount.displayName || currentAccount.username;
+          const diff = count - previousCount;
+          const title = `Новое письмо (${accountName})`;
+          const body = diff === 1 ? 'Получено новое входящее письмо' : `Получено ${diff} новых писем`;
+
+          try {
+            const sound = currentAccount.sound || 'Glass';
+
+            if (sound !== 'None') {
+              window.electronAPI.app.playSystemSound(sound);
+            }
+
+            window.electronAPI.app.showNotification({
+              title,
+              body,
+              silent: true
+            });
+          } catch (e) {
+            console.error('Failed to trigger native notification:', e);
+          }
+        }
+      }
+
+      return prev.map(acc =>
+        acc.id === accountId ? { ...acc, unreadCount: count } : acc
+      );
+    });
+  }, []);
 
   // Load accounts and state on mount
   useEffect(() => {
@@ -51,11 +88,7 @@ const AppContent: React.FC = () => {
 
     const unsubscribeUnread = window.electronAPI.webview.onUnreadCount?.(
       (accountId: string, count: number) => {
-        setAccounts(prev => 
-          prev.map(acc => 
-            acc.id === accountId ? { ...acc, unreadCount: count } : acc
-          )
-        );
+        handleUnreadCountUpdate(accountId, count);
       }
     );
 
@@ -69,7 +102,7 @@ const AppContent: React.FC = () => {
       try { (unsubscribeUnread as any)?.(); } catch {}
       try { (unsubscribeTitle as any)?.(); } catch {}
     };
-  }, []);
+  }, [handleUnreadCountUpdate]);
 
   // Handle webview messages
   useEffect(() => {
@@ -90,42 +123,7 @@ const AppContent: React.FC = () => {
           }
           
           const count = data || 0;
-          console.log(`📊 Unread count for account ${accountId}: ${count}`);
-          
-          setAccounts(prev => {
-            const currentAccount = prev.find(acc => acc.id === accountId);
-            if (currentAccount) {
-              const previousCount = currentAccount.unreadCount || 0;
-              // If the count has increased, trigger macOS notification banner and custom sound
-              if (count > previousCount) {
-                const accountName = currentAccount.displayName || currentAccount.username;
-                const diff = count - previousCount;
-                const title = `Новое письмо (${accountName})`;
-                const body = diff === 1 ? 'Получено новое входящее письмо' : `Получено ${diff} новых писем`;
-                
-                try {
-                  const sound = currentAccount.sound || 'Glass';
-                  
-                  // 1. Play the custom mailbox sound natively in the background using afplay (100% reliable)
-                  if (sound !== 'None') {
-                    window.electronAPI.app.playSystemSound(sound);
-                  }
-                  
-                  // 2. Trigger native macOS notification banner (set to silent to avoid double sound or OS conflicts)
-                  window.electronAPI.app.showNotification({
-                    title: title,
-                    body: body,
-                    silent: true // Custom sound is already played via afplay
-                  });
-                } catch (e) {
-                  console.error('Failed to trigger native notification:', e);
-                }
-              }
-            }
-            return prev.map(acc => 
-              acc.id === accountId ? { ...acc, unreadCount: count } : acc
-            );
-          });
+          handleUnreadCountUpdate(accountId, count);
         }
         else if (channel === 'unread-count-test') {
           // Handle test messages
@@ -142,7 +140,7 @@ const AppContent: React.FC = () => {
 
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
-  }, []);
+  }, [handleUnreadCountUpdate]);
 
   const loadAccounts = async () => {
     try {
