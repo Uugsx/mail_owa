@@ -53,14 +53,14 @@ const mainWorldCode = `
     // A. Dynamic Visibility API Override
     try {
       Object.defineProperty(document, 'hidden', {
-        get: () => !isTabActive,
+        get: () => false,
         configurable: true
       });
       Object.defineProperty(document, 'visibilityState', {
-        get: () => isTabActive ? 'visible' : 'hidden',
+        get: () => 'visible',
         configurable: true
       });
-      console.log('✅ Page Visibility API overridden in main world');
+      console.log('✅ Page Visibility API overridden in main world (always visible)');
     } catch (e) {
       console.warn('❌ Failed to override Page Visibility API in main world:', e);
     }
