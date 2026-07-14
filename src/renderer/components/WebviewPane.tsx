@@ -27,9 +27,9 @@ async function getDarkReaderSource(): Promise<string | null> {
 }
 
 // Dark Mode: inject Dark Reader into webview via executeJavaScript (bypasses CSP)
-const applyDarkThemeToWebview = async (webview: Electron.WebviewTag, dark: boolean) => {
+const applyDarkThemeToWebview = async (webview: Electron.WebviewTag, dark: boolean, active: boolean) => {
   try {
-    if (dark) {
+    if (dark && active) {
       const source = await getDarkReaderSource();
       if (!source) {
         console.warn('Dark Reader source not available');
@@ -138,7 +138,7 @@ const WebviewPane: React.FC<WebviewPaneProps> = ({ account, isActive }) => {
       } catch {}
 
       // Inject dark theme if active
-      applyDarkThemeToWebview(webview, isDark);
+      applyDarkThemeToWebview(webview, isDark, isActive);
             // Execute initialization script to set OWA-specific flags and pass accountId
       webview.executeJavaScript(`
         try {
@@ -363,12 +363,12 @@ const WebviewPane: React.FC<WebviewPaneProps> = ({ account, isActive }) => {
     };
   }, [webviewEl, account.id, account.loginUrl, account.password, account.username, account.displayName, partitionName, preloadPath]);
 
-  // Sync dark theme with the webview when theme state changes
+  // Sync dark theme with the webview when theme or active state changes
   useEffect(() => {
     if (webviewEl && isReady) {
-      applyDarkThemeToWebview(webviewEl, isDark);
+      applyDarkThemeToWebview(webviewEl, isDark, isActive);
     }
-  }, [webviewEl, isReady, isDark]);
+  }, [webviewEl, isReady, isDark, isActive]);
 
   // Sync active state with the webview guest
   useEffect(() => {
