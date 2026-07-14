@@ -1,8 +1,8 @@
 export interface AccountMeta {
   id: string;            // uuid
-  displayName: string;   // "Рабочая (основная)"
-  loginUrl: string;      // "https://cas.smartds.ru/owa/"
-  username?: string;     // не обязательное поле
+  displayName: string;   // "Work Account"
+  loginUrl: string;      // "https://mail.company.com/owa/"
+  username?: string;     // Optional username
   password?: string;     // зашифрованный пароль
   color?: string;        // для аватара
   createdAt: string;     // ISO
