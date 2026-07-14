@@ -233,18 +233,9 @@ function initializeSessions(): Promise<void> {
               // Use setTimeout to avoid infinite loop inside cookies.on('changed')
               setTimeout(() => {
                 try {
-                  ses.cookies.set(newCookie)
-                    .then(() => ses.cookies.flushStore())
-                    .catch(() => {});
+                  ses.cookies.set(newCookie).catch(() => {});
                 } catch {}
               }, 100);
-            } else {
-              // Flush normal persistent cookie changes
-              const now = Date.now();
-              if (now - lastCookieFlush > 500) {
-                lastCookieFlush = now;
-                ses.cookies.flushStore().catch(() => {});
-              }
             }
           });
           
