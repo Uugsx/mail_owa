@@ -116,13 +116,21 @@ function detectUnreadCount(): void {
       }
     }
 
-    // 2. Fallback to scanning narrow elements if title did not yield count
+    // 2. Fallback to scanning sidebar/navigation elements (highly CPU efficient)
     if (!hasValidSource) {
-      // Query links, buttons, options and treeitems (excluding heavy generic divs/spans)
-      const elements = Array.from(document.querySelectorAll('a, [role="treeitem"], [role="option"], button'));
+      // Find the navigation pane or sidebar to restrict search scope
+      const sidebar = document.querySelector('nav, [role="navigation"], [class*="sidebar"], [id*="sidebar"], [class*="navigation"], [id*="navigation"], [class*="left-col"], [id*="left-col"], .mail-Layout-Aside, #primaryNavigationGrid, #sideBar');
+      const root = sidebar || document;
+      
+      // If we found a sidebar, we can safely scan div/span/p. Otherwise, scan narrow selectors.
+      const elements = Array.from(root.querySelectorAll(
+        sidebar 
+          ? 'a, [role="treeitem"], [role="option"], button, span, div, p' 
+          : 'a, [role="treeitem"], [role="option"], button, [class*="count"], [class*="badge"], [class*="unread"]'
+      ));
       
       // Limit search to prevent hangs on huge pages
-      const safeElements = elements.slice(0, 1000);
+      const safeElements = elements.slice(0, 1500);
       
       for (const el of safeElements) {
         const text = (el.textContent || '').trim();
@@ -147,7 +155,7 @@ function detectUnreadCount(): void {
             }
           }
           
-          // Check sibling elements for a pure number badge
+          // Check sibling elements
           let sibling = el.nextElementSibling;
           while (sibling) {
             const sibText = (sibling.textContent || '').trim();
@@ -159,6 +167,21 @@ function detectUnreadCount(): void {
               }
             }
             sibling = sibling.nextElementSibling;
+          }
+
+          // Check parent children (common in OWA wrapping layout)
+          const parent = el.parentElement;
+          if (parent) {
+            const children = Array.from(parent.children);
+            for (const child of children) {
+              const childText = (child.textContent || '').trim();
+              if (childText && /^\d+$/.test(childText)) {
+                const num = parseInt(childText, 10);
+                if (!isNaN(num) && num > 0) {
+                  unreadCount = Math.max(unreadCount, num);
+                }
+              }
+            }
           }
         }
       }
