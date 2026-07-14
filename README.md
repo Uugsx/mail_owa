@@ -40,6 +40,13 @@ Simply download the latest ready-to-use version of the app:
 2. Download the `.dmg` file for your macOS architecture.
 3. Open the `.dmg` file and drag **OWA Accounts** to your **Applications** folder.
 
+> [!NOTE]
+> **macOS Gatekeeper Warning:** Since the app is not signed with an Apple Developer certificate, macOS will block it and show a message saying the app is *"damaged and cannot be opened"*.
+> To fix this, run the following command in your terminal:
+> ```bash
+> xattr -cr /Applications/OWA\ Accounts.app
+> ```
+
 ---
 
 ### 🛠️ Development & Building from Source
@@ -100,6 +107,13 @@ The compiled app will be in the `./dist-electron` folder.
 1. Перейдите в раздел [Releases](https://github.com/Uugsx/mail_owa/releases).
 2. Скачайте файл `.dmg` для вашей версии macOS.
 3. Откройте скачанный `.dmg` и перетащите иконку **OWA Accounts** в папку **Программы** (Applications).
+
+> [!NOTE]
+> **Предупреждение macOS Gatekeeper:** Так как приложение не подписано платным сертификатом разработчика Apple, система macOS автоматически заблокирует его запуск с ошибкой: *"Приложение OWA Accounts повреждено и его не удается открыть"*.
+> Чтобы запустить приложение, выполните в терминале команду:
+> ```bash
+> xattr -cr /Applications/OWA\ Accounts.app
+> ```
 
 ---
 
