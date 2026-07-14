@@ -5,6 +5,11 @@ import { AccountMeta, CustomNotificationOptions } from './types';
 
 // Set application name for macOS menu bar and system notifications
 app.name = 'OWA Accounts';
+try {
+  app.setAppUserModelId('com.owa.accounts');
+} catch (e) {
+  console.warn('Failed to set AppUserModelId:', e);
+}
 
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
@@ -575,33 +580,40 @@ ipcMain.handle('app:get-state', () => {
 });
 
 ipcMain.handle('app:show-notification', (_, options: CustomNotificationOptions) => {
-  if (Notification.isSupported()) {
-    const isSilent = options.silent || options.sound === 'None';
-    
-    // Resolve absolute path to app icon.png for both development and production packaged builds
-    const defaultIcon = app.isPackaged
-      ? join(process.resourcesPath, 'icon.png')
-      : join(app.getAppPath(), 'build/icon.png');
+  try {
+    if (Notification.isSupported()) {
+      const isSilent = options.silent || options.sound === 'None';
+      
+      // Resolve absolute path to app icon.png for both development and production packaged builds
+      const defaultIcon = app.isPackaged
+        ? join(process.resourcesPath, 'icon.png')
+        : join(app.getAppPath(), 'build/icon.png');
 
-    const isMac = process.platform === 'darwin';
-    const notification = new Notification({
-      title: options.title || 'OWA Accounts',
-      body: options.body,
-      // On macOS, the OS automatically uses the Dock icon on the left.
-      // Omit the icon parameter here to avoid showing a duplicate icon on the right side.
-      icon: isMac ? undefined : (options.icon || defaultIcon),
-      silent: isSilent,
-      sound: isSilent ? undefined : (options.sound || 'Glass')
-    });
-    
-    notification.show();
-    
-    notification.on('click', () => {
-      if (mainWindow) {
-        mainWindow.show();
-        mainWindow.focus();
-      }
-    });
+      const isMac = process.platform === 'darwin';
+      const notification = new Notification({
+        title: options.title || 'OWA Accounts',
+        body: options.body,
+        // On macOS, the OS automatically uses the Dock icon on the left.
+        // Omit the icon parameter here to avoid showing a duplicate icon on the right side.
+        icon: isMac ? undefined : (options.icon || defaultIcon),
+        silent: isSilent,
+        sound: isSilent ? undefined : (options.sound || 'Glass')
+      });
+      
+      console.log(`🔔 Showing system notification: [${options.title}] - ${options.body} (sound: ${options.sound}, silent: ${isSilent})`);
+      notification.show();
+      
+      notification.on('click', () => {
+        if (mainWindow) {
+          mainWindow.show();
+          mainWindow.focus();
+        }
+      });
+    } else {
+      console.warn('⚠️ Notifications are not supported on this system');
+    }
+  } catch (err) {
+    console.error('❌ Failed to show native notification:', err);
   }
 });
 
