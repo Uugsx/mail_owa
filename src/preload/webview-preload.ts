@@ -15,15 +15,6 @@ try {
     get: () => 'visible',
     configurable: true
   });
-  
-  const originalAddEventListener = EventTarget.prototype.addEventListener;
-  EventTarget.prototype.addEventListener = function(type, listener, options) {
-    if (type === 'visibilitychange') {
-      // Ignore visibility change event listeners to prevent the page from knowing it is hidden
-      return;
-    }
-    return originalAddEventListener.call(this, type, listener, options);
-  };
   console.log('✅ Page Visibility API bypassed to keep background sockets active');
 } catch (e) {
   console.warn('Failed to bypass Page Visibility API:', e);
@@ -492,16 +483,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Initial check after 5 seconds
   setTimeout(detectUnreadCount, 5000);
-
-  // Also check for password fields when page changes
-  const observer = new MutationObserver(() => {
-    autoFillPassword();
-  });
-
-  observer.observe(document.body, {
-    childList: true,
-    subtree: true
-  });
 });
 
 // Forward keyboard shortcuts Cmd+Q and Cmd+W from webview to main process
@@ -537,10 +518,11 @@ const registerOnIframe = (iframe: HTMLIFrameElement) => {
   }
 };
 
-// Polling monitor to attach listeners to newly spawned iframes dynamically
-setInterval(() => {
-  const iframes = document.querySelectorAll('iframe');
-  iframes.forEach(registerOnIframe);
-}, 2000);
+// Register on newly spawned iframes dynamically when they load (saves CPU compared to polling)
+window.addEventListener('load', (event) => {
+  if (event.target && (event.target as HTMLElement).tagName === 'IFRAME') {
+    registerOnIframe(event.target as HTMLIFrameElement);
+  }
+}, true);
 
 console.log('✅ Minimal preload script ready');
