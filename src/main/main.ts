@@ -294,11 +294,11 @@ function initializeSessions(): Promise<void> {
                 // Set OWA-specific localStorage flags to maintain persistent login
                 setTimeout(() => {
                   try {
-                    ses.clearStorageData({ storages: ['cachestorage', 'serviceworkers'] }).then(() => {
-                      console.log(`🧹 Cache and service workers cleared for ${account.displayName} to prevent stale data`);
+                    ses.clearStorageData({ storages: ['cachestorage'] }).then(() => {
+                      console.log(`🧹 Cache cleared for ${account.displayName} to prevent stale data`);
                     }).catch(() => {});
                   } catch (error) {
-                    console.warn(`Failed to clear cache/SW for ${account.displayName}:`, error);
+                    console.warn(`Failed to clear cache for ${account.displayName}:`, error);
                   }
                 }, 1000);
               } else {

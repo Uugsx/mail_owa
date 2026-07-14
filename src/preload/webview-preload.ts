@@ -1,6 +1,6 @@
 import { ipcRenderer, webFrame } from 'electron';
 
-if (webFrame.isMainFrame()) {
+if (typeof window !== 'undefined' && window.self === window.top) {
   runPreload();
 }
 
@@ -53,14 +53,14 @@ const mainWorldCode = `
     // A. Dynamic Visibility API Override
     try {
       Object.defineProperty(document, 'hidden', {
-        get: () => false,
+        get: () => !isTabActive,
         configurable: true
       });
       Object.defineProperty(document, 'visibilityState', {
-        get: () => 'visible',
+        get: () => isTabActive ? 'visible' : 'hidden',
         configurable: true
       });
-      console.log('✅ Page Visibility API overridden in main world (always visible)');
+      console.log('✅ Page Visibility API overridden in main world');
     } catch (e) {
       console.warn('❌ Failed to override Page Visibility API in main world:', e);
     }
@@ -105,38 +105,6 @@ const mainWorldCode = `
         }
       }
     });
-
-    // D. Disable and clean Service Workers to prevent background worker threads from hogging CPU
-    try {
-      if (navigator.serviceWorker) {
-        // Unregister existing workers first
-        if (navigator.serviceWorker.getRegistrations) {
-          navigator.serviceWorker.getRegistrations().then((registrations) => {
-            for (let r of registrations) {
-              r.unregister().then((success) => {
-                if (success) console.log('🧹 Existing service worker unregistered successfully');
-              });
-            }
-          }).catch(() => {});
-        }
-
-        // Mock serviceWorker object to prevent new registration
-        Object.defineProperty(navigator, 'serviceWorker', {
-          get: () => ({
-            register: () => Promise.reject(new Error('Service workers disabled for CPU optimization')),
-            getRegistrations: () => Promise.resolve([]),
-            addEventListener: () => {},
-            removeEventListener: () => {},
-            controller: null,
-            ready: new Promise(() => {})
-          }),
-          configurable: true
-        });
-        console.log('🚫 Service workers disabled in main world');
-      }
-    } catch (e) {
-      console.warn('❌ Failed to disable service workers in main world:', e);
-    }
   })();
 `;
 

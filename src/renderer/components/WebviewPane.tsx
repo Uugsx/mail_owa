@@ -529,7 +529,7 @@ const WebviewPane: React.FC<WebviewPaneProps> = ({ account, isActive }) => {
         preload={preloadPath}
         autosize={false}
         nodeintegration={false}
-        style={isActive ? {} : { display: 'none' }}
+        style={isActive ? {} : { position: 'absolute', width: '0px', height: '0px', opacity: 0, pointerEvents: 'none' }}
         webpreferences="contextIsolation=true,sandbox=false,allowRunningInsecureContent=true,persistSession=true,enableRemoteModule=false,nativeWindowOpen=true,ignoreSSL=true,ignoreCertificateErrors=true,backgroundThrottling=true"
         useragent={account.loginUrl.includes('google') || account.loginUrl.includes('gmail')
           ? `Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Safari/605.1.15 OWA-Account-ID/${account.id}`
