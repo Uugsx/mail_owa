@@ -22,10 +22,22 @@ try {
 
 // Receive accountId from host renderer and expose it for message posts
 try {
-  // Synchronously initialize OWA_ACCOUNT_ID from window.name (prevents race conditions and persists across navigations)
-  if (typeof window !== 'undefined' && window.name) {
-    (window as any).OWA_ACCOUNT_ID = window.name;
-    console.log('✅ Account ID synchronously initialized from window.name:', window.name);
+  // Synchronously initialize OWA_ACCOUNT_ID from UserAgent or window.name (prevents race conditions and persists across navigations)
+  const getAccountId = (): string | null => {
+    if (typeof navigator !== 'undefined') {
+      const match = navigator.userAgent.match(/OWA-Account-ID\/([a-zA-Z0-9-]+)/);
+      if (match) return match[1];
+    }
+    if (typeof window !== 'undefined' && window.name) {
+      return window.name;
+    }
+    return null;
+  };
+  
+  const parsedId = getAccountId();
+  if (parsedId) {
+    (window as any).OWA_ACCOUNT_ID = parsedId;
+    console.log('✅ Account ID synchronously initialized in preload:', parsedId);
   }
 
   ipcRenderer.on('set-account-id', (_event, accountId: string) => {

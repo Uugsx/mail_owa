@@ -514,8 +514,8 @@ const WebviewPane: React.FC<WebviewPaneProps> = ({ account, isActive }) => {
         nodeintegration={false}
         webpreferences="contextIsolation=true,sandbox=false,allowRunningInsecureContent=true,persistSession=true,enableRemoteModule=false,nativeWindowOpen=true,ignoreSSL=true,ignoreCertificateErrors=true,backgroundThrottling=false"
         useragent={account.loginUrl.includes('google') || account.loginUrl.includes('gmail')
-          ? "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Safari/605.1.15"
-          : "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
+          ? `Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Safari/605.1.15 OWA-Account-ID/${account.id}`
+          : `Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36 OWA-Account-ID/${account.id}`
         }
         className="w-full h-full flex-1"
         data-account-id={account.id} // Add data attribute for easier selection
