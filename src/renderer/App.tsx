@@ -96,16 +96,29 @@ const AppContent: React.FC = () => {
             const currentAccount = prev.find(acc => acc.id === accountId);
             if (currentAccount) {
               const previousCount = currentAccount.unreadCount || 0;
-              // If the count has increased, play the custom mailbox sound natively
+              // If the count has increased, trigger macOS notification banner and custom sound
               if (count > previousCount) {
+                const accountName = currentAccount.displayName || currentAccount.username;
+                const diff = count - previousCount;
+                const title = `Новое письмо (${accountName})`;
+                const body = diff === 1 ? 'Получено новое входящее письмо' : `Получено ${diff} новых писем`;
+                
                 try {
                   const sound = currentAccount.sound || 'Glass';
+                  
+                  // 1. Play the custom mailbox sound natively in the background using afplay (100% reliable)
                   if (sound !== 'None') {
-                    // Play the custom mailbox sound natively in the background
                     window.electronAPI.app.playSystemSound(sound);
                   }
+                  
+                  // 2. Trigger native macOS notification banner (set to silent to avoid double sound or OS conflicts)
+                  window.electronAPI.app.showNotification({
+                    title: title,
+                    body: body,
+                    silent: true // Custom sound is already played via afplay
+                  });
                 } catch (e) {
-                  console.error('Failed to play native notification sound:', e);
+                  console.error('Failed to trigger native notification:', e);
                 }
               }
             }

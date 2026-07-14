@@ -154,12 +154,10 @@ function detectUnreadCount(): void {
             sibling = sibling.nextElementSibling;
           }
           
-          // Traverse up to 2 parent levels to scan sibling branches and text content (bulletproof for nested OWA/Gmail)
-          let currentParent = el.parentElement;
-          let levels = 0;
-          while (currentParent && levels < 2) {
-            // 1. Scan all child nodes of this container for standalone number badges
-            const children = Array.from(currentParent.children);
+          // Check parent row children (siblings of the name element within the same folder row)
+          const parent = el.parentElement;
+          if (parent) {
+            const children = Array.from(parent.children);
             for (const child of children) {
               if (child === el || child.contains(el)) continue;
               const childText = (child.textContent || '').trim();
@@ -171,9 +169,9 @@ function detectUnreadCount(): void {
               }
             }
             
-            // 2. Scan overall container text for any digit fallback
-            const parentText = (currentParent.textContent || '').trim();
-            const parentAria = currentParent.getAttribute('aria-label') || '';
+            // Also check the immediate parent row's combined text content (only contains this folder's name and badge)
+            const parentText = (parent.textContent || '').trim();
+            const parentAria = parent.getAttribute('aria-label') || '';
             const parentMatch = (parentText + ' ' + parentAria).match(/\d+/);
             if (parentMatch) {
               const num = parseInt(parentMatch[0], 10);
@@ -181,9 +179,6 @@ function detectUnreadCount(): void {
                 unreadCount = Math.max(unreadCount, num);
               }
             }
-            
-            currentParent = currentParent.parentElement;
-            levels++;
           }
         }
       } catch (e) {
@@ -197,10 +192,10 @@ function detectUnreadCount(): void {
       const unreadSelectors = [
         '[data-testid="unread-count"]',
         '.unread-count',
-        '.mail-NestedList-Item-Info-Badge', // Yandex Mail folder badge
-        '.bsU', // Gmail unread badge
-        '.badge:not(.read)',
-        '.count:not(.read)'
+        '.bsU', // Gmail unread badge (Inbox-only)
+        '[href="#inbox"] .mail-NestedList-Item-Info-Badge', // Yandex Mail Inbox folder badge
+        '[data-key="box=inbox"] .mail-NestedList-Item-Info-Badge', // Yandex alternative
+        '[data-title="Входящие"] .mail-NestedList-Item-Info-Badge' // Yandex title alternative
       ];
       
       for (const selector of unreadSelectors) {
