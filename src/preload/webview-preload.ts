@@ -116,73 +116,81 @@ function detectUnreadCount(): void {
       }
     }
 
-    // 2. Fallback to native XPath text search (extremely fast, 0% CPU impact and 100% accurate)
+    // 2. Fallback to native querySelectorAll text search (extremely fast, 0% CPU impact and 100% accurate)
     if (!hasValidSource) {
       try {
-        // Find elements that have the exact text 'Входящие' / 'Inbox', or normalize spacing, or aria-labels
-        const xpath = "//*[normalize-space(text())='Входящие' or normalize-space(text())='Inbox' or @aria-label='Входящие' or @aria-label='Inbox' or contains(@aria-label, 'Входящие непрочитанные') or contains(@aria-label, 'inbox unread')]";
-        const result = document.evaluate(xpath, document, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null);
+        // Query only relevant tag types and elements with specific aria-labels to keep DOM traversal minimal and fast
+        const queryElements = document.querySelectorAll('span, a, div, [aria-label*="Входящие" i], [aria-label*="Inbox" i], [aria-label*="unread" i], [aria-label*="непрочитан" i]');
         
-        for (let i = 0; i < result.snapshotLength; i++) {
-          const el = result.snapshotItem(i) as HTMLElement;
-          if (!el || (el.offsetParent === null && el.clientHeight === 0 && el.clientWidth === 0)) continue;
+        for (let i = 0; i < queryElements.length; i++) {
+          const el = queryElements[i] as HTMLElement;
+          if (!el) continue;
           
-          foundInbox = true;
-          
-          // Check if the element itself has a number (e.g. "Входящие (2)")
           const text = (el.textContent || '').trim();
           const aria = el.getAttribute('aria-label') || '';
-          const m = (text + ' ' + aria).match(/\d+/);
-          if (m) {
-            const num = parseInt(m[0], 10);
-            if (!isNaN(num) && num > 0) {
-              unreadCount = Math.max(unreadCount, num);
-            }
-          }
           
-          // Check sibling elements for count badge
-          let sibling = el.nextElementSibling;
-          while (sibling) {
-            const sibText = (sibling.textContent || '').trim();
-            if (sibText && /^\d+$/.test(sibText)) {
-              const num = parseInt(sibText, 10);
+          const isInboxText = text === 'Входящие' || text === 'Inbox';
+          const isInboxAria = aria.includes('Входящие') || aria.toLowerCase().includes('inbox') || 
+                              aria.includes('непрочитанные') || aria.toLowerCase().includes('unread');
+          
+          if (isInboxText || isInboxAria) {
+            if (el.offsetParent === null && el.clientHeight === 0 && el.clientWidth === 0) continue;
+            
+            foundInbox = true;
+            
+            // Check if the element itself has a number (e.g. "Входящие (2)")
+            const m = (text + ' ' + aria).match(/\d+/);
+            if (m) {
+              const num = parseInt(m[0], 10);
               if (!isNaN(num) && num > 0) {
                 unreadCount = Math.max(unreadCount, num);
-                break;
-              }
-            }
-            sibling = sibling.nextElementSibling;
-          }
-          
-          // Check parent row children (siblings of the name element within the same folder row)
-          const parent = el.parentElement;
-          if (parent) {
-            const children = Array.from(parent.children);
-            for (const child of children) {
-              if (child === el || child.contains(el)) continue;
-              const childText = (child.textContent || '').trim();
-              if (childText && /^\d+$/.test(childText)) {
-                const num = parseInt(childText, 10);
-                if (!isNaN(num) && num > 0) {
-                  unreadCount = Math.max(unreadCount, num);
-                }
               }
             }
             
-            // Also check the immediate parent row's combined text content (only contains this folder's name and badge)
-            const parentText = (parent.textContent || '').trim();
-            const parentAria = parent.getAttribute('aria-label') || '';
-            const parentMatch = (parentText + ' ' + parentAria).match(/\d+/);
-            if (parentMatch) {
-              const num = parseInt(parentMatch[0], 10);
-              if (!isNaN(num) && num > 0 && num < 10000) {
-                unreadCount = Math.max(unreadCount, num);
+            // Check sibling elements for count badge
+            let sibling = el.nextElementSibling;
+            while (sibling) {
+              const sibText = (sibling.textContent || '').trim();
+              if (sibText && /^\d+$/.test(sibText)) {
+                const num = parseInt(sibText, 10);
+                if (!isNaN(num) && num > 0) {
+                  unreadCount = Math.max(unreadCount, num);
+                  break;
+                }
+              }
+              sibling = sibling.nextElementSibling;
+            }
+            
+            // Check parent row children (siblings of the name element within the same folder row)
+            const parent = el.parentElement;
+            if (parent) {
+              const children = Array.from(parent.children);
+              for (const child of children) {
+                if (child === el || child.contains(el)) continue;
+                const childText = (child.textContent || '').trim();
+                if (childText && /^\d+$/.test(childText)) {
+                  const num = parseInt(childText, 10);
+                  if (!isNaN(num) && num > 0) {
+                    unreadCount = Math.max(unreadCount, num);
+                  }
+                }
+              }
+              
+              // Also check the immediate parent row's combined text content (only contains this folder's name and badge)
+              const parentText = (parent.textContent || '').trim();
+              const parentAria = parent.getAttribute('aria-label') || '';
+              const parentMatch = (parentText + ' ' + parentAria).match(/\d+/);
+              if (parentMatch) {
+                const num = parseInt(parentMatch[0], 10);
+                if (!isNaN(num) && num > 0 && num < 10000) {
+                  unreadCount = Math.max(unreadCount, num);
+                }
               }
             }
           }
         }
       } catch (e) {
-        console.warn('XPath search failed:', e);
+        console.warn('DOM unread search failed:', e);
       }
     }
 
