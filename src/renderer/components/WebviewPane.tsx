@@ -70,6 +70,7 @@ const WebviewPane: React.FC<WebviewPaneProps> = ({ account, isActive }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const [isReady, setIsReady] = useState(false);
 
   // Generate partition name - use shared partition for same domain
   const getPartitionName = (account: AccountMeta): string => {
@@ -121,15 +122,19 @@ const WebviewPane: React.FC<WebviewPaneProps> = ({ account, isActive }) => {
       setIsLoading(true);
       setHasError(false);
       setErrorMessage('');
+      setIsReady(false);
     }
 
     // Event handlers
     const handleDOMReady = () => {
       console.log(`Webview DOM ready for account: ${account.displayName} with partition: ${partitionName}`);
       setIsLoading(false);
+      setIsReady(true);
       try {
         // Inform preload about the account id explicitly via IPC in the guest
         webview.send?.('set-account-id', account.id);
+        // Send active status immediately
+        webview.send?.('set-active', isActive);
       } catch {}
 
       // Inject dark theme if active
@@ -145,8 +150,8 @@ const WebviewPane: React.FC<WebviewPaneProps> = ({ account, isActive }) => {
           }
           
           // Make accountId available to the page as fallback
-          window.OWA_ACCOUNT_ID = '${account.id}';
-          console.log('✅ Account ID available to page: ${account.id}');
+          window.OWA_ACCOUNT_ID = ${JSON.stringify(account.id)};
+          console.log('✅ Account ID available to page: ' + ${JSON.stringify(account.id)});
         } catch (e) {
           console.warn('OWA initialization script failed:', e);
         }
@@ -202,7 +207,7 @@ const WebviewPane: React.FC<WebviewPaneProps> = ({ account, isActive }) => {
                 // Fill password fields
                 passwordFields.forEach(field => {
                   if (field instanceof HTMLInputElement) {
-                    field.value = '${account.password}';
+                    field.value = ${JSON.stringify(account.password)};
                     field.dispatchEvent(new Event('input', { bubbles: true }));
                     field.dispatchEvent(new Event('change', { bubbles: true }));
                     console.log('✅ Password auto-filled for CAS page');
@@ -210,10 +215,10 @@ const WebviewPane: React.FC<WebviewPaneProps> = ({ account, isActive }) => {
                 });
 
                 // Try to fill username if available
-                if (account.username) {
+                if (${JSON.stringify(!!account.username)}) {
                   usernameFields.forEach(field => {
                     if (field instanceof HTMLInputElement && !field.value) {
-                      field.value = '${account.username}';
+                      field.value = ${JSON.stringify(account.username)};
                       field.dispatchEvent(new Event('input', { bubbles: true }));
                       field.dispatchEvent(new Event('change', { bubbles: true }));
                       console.log('✅ Username auto-filled for CAS page');
@@ -360,10 +365,22 @@ const WebviewPane: React.FC<WebviewPaneProps> = ({ account, isActive }) => {
 
   // Sync dark theme with the webview when theme state changes
   useEffect(() => {
-    if (webviewEl) {
+    if (webviewEl && isReady) {
       applyDarkThemeToWebview(webviewEl, isDark);
     }
-  }, [webviewEl, isDark]);
+  }, [webviewEl, isReady, isDark]);
+
+  // Sync active state with the webview guest
+  useEffect(() => {
+    if (webviewEl) {
+      try {
+        webviewEl.send('set-active', isActive);
+        console.log(`📨 Sent set-active: ${isActive} to account: ${account.displayName}`);
+      } catch (err) {
+        console.warn('Failed to send set-active to webview:', err);
+      }
+    }
+  }, [webviewEl, isActive]);
 
   const handleRetry = () => {
     try {
@@ -512,6 +529,7 @@ const WebviewPane: React.FC<WebviewPaneProps> = ({ account, isActive }) => {
         preload={preloadPath}
         autosize={false}
         nodeintegration={false}
+        style={isActive ? {} : { display: 'none' }}
         webpreferences="contextIsolation=true,sandbox=false,allowRunningInsecureContent=true,persistSession=true,enableRemoteModule=false,nativeWindowOpen=true,ignoreSSL=true,ignoreCertificateErrors=true,backgroundThrottling=true"
         useragent={account.loginUrl.includes('google') || account.loginUrl.includes('gmail')
           ? `Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Safari/605.1.15 OWA-Account-ID/${account.id}`

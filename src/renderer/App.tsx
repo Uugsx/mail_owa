@@ -300,7 +300,11 @@ const AppContent: React.FC = () => {
             {accounts.map((account) => (
               <div
                 key={account.id}
-                className={`absolute inset-0 transition-opacity duration-150 ${activeAccountId === account.id ? 'z-10 opacity-100 visible' : 'z-0 opacity-0 invisible pointer-events-none'}`}
+                className="absolute inset-0"
+                style={activeAccountId === account.id
+                  ? { zIndex: 10 }
+                  : { zIndex: 0, width: '0px', height: '0px', opacity: 0, overflow: 'hidden', pointerEvents: 'none' }
+                }
               >
                 <WebviewPane account={account} isActive={activeAccountId === account.id} />
               </div>

@@ -294,11 +294,11 @@ function initializeSessions(): Promise<void> {
                 // Set OWA-specific localStorage flags to maintain persistent login
                 setTimeout(() => {
                   try {
-                    ses.clearStorageData({ storages: ['cachestorage'] }).then(() => {
-                      console.log(`🧹 Cache cleared for ${account.displayName} to prevent stale data`);
+                    ses.clearStorageData({ storages: ['cachestorage', 'serviceworkers'] }).then(() => {
+                      console.log(`🧹 Cache and service workers cleared for ${account.displayName} to prevent stale data`);
                     }).catch(() => {});
                   } catch (error) {
-                    console.warn(`Failed to clear cache for ${account.displayName}:`, error);
+                    console.warn(`Failed to clear cache/SW for ${account.displayName}:`, error);
                   }
                 }, 1000);
               } else {
@@ -802,9 +802,11 @@ app.whenReady().then(async () => {
   app.commandLine.appendSwitch('--ignore-certificate-errors-spki-list');
   app.commandLine.appendSwitch('--ignore-ssl-errors-subject-alt-name-list');
   app.commandLine.appendSwitch('--ignore-certificate-errors-subject-alt-name-list');
-  app.commandLine.appendSwitch('--disable-background-timer-throttling');
-  app.commandLine.appendSwitch('--disable-backgrounding-occluded-windows');
-  app.commandLine.appendSwitch('--disable-renderer-backgrounding');
+  // NOTE: We intentionally do NOT set --disable-background-timer-throttling,
+  // --disable-backgrounding-occluded-windows, or --disable-renderer-backgrounding.
+  // Those flags prevent Chromium from throttling hidden webview renderers, causing
+  // each OWA tab to burn ~100% CPU even when not visible.  Push notifications
+  // are preserved via WebSocket.close() interception in the webview preload.
 
   await initializeSessions();
   await createWindow();

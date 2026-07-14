@@ -1,24 +1,162 @@
-/**
- * Minimal preload script for OWA webview
- */
-import { ipcRenderer } from 'electron';
+import { ipcRenderer, webFrame } from 'electron';
 
-console.log('🔧 OWA webview preload script initialized');
-
-// Bypass Page Visibility API throttling for background webviews (keeps Gmail socket alive in real-time)
-try {
-  Object.defineProperty(document, 'hidden', {
-    get: () => false,
-    configurable: true
-  });
-  Object.defineProperty(document, 'visibilityState', {
-    get: () => 'visible',
-    configurable: true
-  });
-  console.log('✅ Page Visibility API bypassed to keep background sockets active');
-} catch (e) {
-  console.warn('Failed to bypass Page Visibility API:', e);
+if (webFrame.isMainFrame()) {
+  runPreload();
 }
+
+function runPreload() {
+  console.log('🔧 OWA webview preload script initialized');
+
+let isTabActive = false;
+let cpuStyleElement: HTMLStyleElement | null = null;
+
+function applyCpuOptimization(active: boolean) {
+  try {
+    if (!active) {
+      if (!cpuStyleElement && document.documentElement) {
+        cpuStyleElement = document.createElement('style');
+        cpuStyleElement.id = 'owa-cpu-optimization-style';
+        cpuStyleElement.textContent = `
+          *, *::before, *::after {
+            animation: none !important;
+            transition: none !important;
+            animation-duration: 0s !important;
+            transition-duration: 0s !important;
+          }
+        `;
+        document.documentElement.appendChild(cpuStyleElement);
+        console.log('💤 CPU optimization stylesheet injected (animations disabled)');
+      }
+    } else {
+      if (cpuStyleElement) {
+        cpuStyleElement.remove();
+        cpuStyleElement = null;
+        console.log('⚡ CPU optimization stylesheet removed (animations enabled)');
+      }
+    }
+  } catch (err) {
+    console.warn('Failed to apply CPU optimization style:', err);
+  }
+}
+
+// Apply initially if document.documentElement is already available
+if (typeof document !== 'undefined' && document.documentElement) {
+  applyCpuOptimization(isTabActive);
+}
+
+// 1. Inject Main World Override Script via webFrame
+// This runs in the guest page's main context, bypassing CSP and allowing us to override read-only visibilityState properties.
+const mainWorldCode = `
+  (function() {
+    let isTabActive = false;
+
+    // A. Dynamic Visibility API Override
+    try {
+      Object.defineProperty(document, 'hidden', {
+        get: () => !isTabActive,
+        configurable: true
+      });
+      Object.defineProperty(document, 'visibilityState', {
+        get: () => isTabActive ? 'visible' : 'hidden',
+        configurable: true
+      });
+      console.log('✅ Page Visibility API overridden in main world');
+    } catch (e) {
+      console.warn('❌ Failed to override Page Visibility API in main world:', e);
+    }
+
+    // B. WebSocket/EventSource close methods interception
+    try {
+      const _origWsClose = WebSocket.prototype.close;
+      WebSocket.prototype.close = function(code, reason) {
+        if (!isTabActive && (code === undefined || code === 1000)) {
+          console.log('🔌 Blocked WebSocket.close() while tab is hidden — keeping push alive');
+          return;
+        }
+        return _origWsClose.call(this, code, reason);
+      };
+
+      if (typeof EventSource !== 'undefined') {
+        const _origEsClose = EventSource.prototype.close;
+        EventSource.prototype.close = function() {
+          if (!isTabActive) {
+            console.log('🔌 Blocked EventSource.close() while tab is hidden — keeping push alive');
+            return;
+          }
+          return _origEsClose.call(this);
+        };
+      }
+      console.log('✅ WebSocket/EventSource close methods intercepted in main world');
+    } catch (e) {
+      console.warn('❌ Failed to intercept socket close in main world:', e);
+    }
+
+    // C. Listen to messages from isolated world to sync isTabActive
+    window.addEventListener('message', (event) => {
+      if (event.data && event.data.type === 'sync-active-state') {
+        const active = event.data.active;
+        if (isTabActive !== active) {
+          isTabActive = active;
+          console.log('👁️ Main world visibility updated:', active ? 'visible' : 'hidden');
+          
+          // Dispatch visibilitychange event
+          const ev = new Event('visibilitychange', { bubbles: true });
+          document.dispatchEvent(ev);
+        }
+      }
+    });
+
+    // D. Disable and clean Service Workers to prevent background worker threads from hogging CPU
+    try {
+      if (navigator.serviceWorker) {
+        // Unregister existing workers first
+        if (navigator.serviceWorker.getRegistrations) {
+          navigator.serviceWorker.getRegistrations().then((registrations) => {
+            for (let r of registrations) {
+              r.unregister().then((success) => {
+                if (success) console.log('🧹 Existing service worker unregistered successfully');
+              });
+            }
+          }).catch(() => {});
+        }
+
+        // Mock serviceWorker object to prevent new registration
+        Object.defineProperty(navigator, 'serviceWorker', {
+          get: () => ({
+            register: () => Promise.reject(new Error('Service workers disabled for CPU optimization')),
+            getRegistrations: () => Promise.resolve([]),
+            addEventListener: () => {},
+            removeEventListener: () => {},
+            controller: null,
+            ready: new Promise(() => {})
+          }),
+          configurable: true
+        });
+        console.log('🚫 Service workers disabled in main world');
+      }
+    } catch (e) {
+      console.warn('❌ Failed to disable service workers in main world:', e);
+    }
+  })();
+`;
+
+try {
+  webFrame.executeJavaScript(mainWorldCode);
+  console.log('✅ Main world bridge injected via webFrame');
+} catch (err) {
+  console.warn('Failed to inject main world bridge:', err);
+}
+
+// IPC listener in isolated context that forwards active state changes to the main world
+ipcRenderer.on('set-active', (_event, active: boolean) => {
+  try {
+    isTabActive = active;
+    window.postMessage({ type: 'sync-active-state', active }, '*');
+    applyCpuOptimization(active);
+  } catch (err) {
+    console.warn('Failed to send set-active message to main world:', err);
+  }
+});
 
 // Receive accountId from host renderer and expose it for message posts
 try {
@@ -116,11 +254,13 @@ function detectUnreadCount(): void {
       }
     }
 
-    // 2. Fallback to native querySelectorAll text search (extremely fast, 0% CPU impact and 100% accurate)
+    // 2. Fallback to targeted aria-label / tree-item search (only touches Inbox-related elements)
     if (!hasValidSource) {
       try {
-        // Query only relevant tag types and elements with specific aria-labels to keep DOM traversal minimal and fast
-        const queryElements = document.querySelectorAll('span, a, div, [aria-label*="Входящие" i], [aria-label*="Inbox" i], [aria-label*="unread" i], [aria-label*="непрочитан" i]');
+        // Only query elements with Inbox-related aria-labels or tree roles — avoids scanning thousands of spans/divs
+        const queryElements = document.querySelectorAll(
+          '[aria-label*="Входящие" i], [aria-label*="Inbox" i], [aria-label*="unread" i], [aria-label*="непрочитан" i], [role="treeitem"], [data-testid*="inbox" i], [data-testid*="unread" i]'
+        );
         
         for (let i = 0; i < queryElements.length; i++) {
           const el = queryElements[i] as HTMLElement;
@@ -129,7 +269,7 @@ function detectUnreadCount(): void {
           const text = (el.textContent || '').trim();
           const aria = el.getAttribute('aria-label') || '';
           
-          const isInboxText = text === 'Входящие' || text === 'Inbox';
+          const isInboxText = text === 'Входящие' || text === 'Inbox' || (el.getAttribute('role') === 'treeitem' && (text.startsWith('Входящие') || text.startsWith('Inbox')));
           const isInboxAria = aria.includes('Входящие') || aria.toLowerCase().includes('inbox') || 
                               aria.includes('непрочитанные') || aria.toLowerCase().includes('unread');
           
@@ -517,6 +657,9 @@ function injectAdBlockerStyles(): void {
 document.addEventListener('DOMContentLoaded', () => {
   console.log('✅ OWA DOM loaded');
 
+  // Apply CPU optimization initially if active is false
+  applyCpuOptimization(isTabActive);
+
   // Inject ad blocker CSS
   injectAdBlockerStyles();
 
@@ -526,8 +669,39 @@ document.addEventListener('DOMContentLoaded', () => {
   // Enhanced password fill for CAS pages
   enhancedPasswordFill();
 
-  // Check for unread count every 15 seconds
-  setInterval(detectUnreadCount, 15000);
+  // --- Instant title-based unread detection via MutationObserver ---
+  // OWA/Gmail/Yandex update the page title to "(N) Outlook" when new mail arrives.
+  // Observing <title> is essentially free (fires only on actual changes).
+  try {
+    const titleEl = document.querySelector('title');
+    if (titleEl) {
+      const titleObserver = new MutationObserver(() => {
+        const title = document.title || '';
+        const m = title.match(/\((\d+)\)/);
+        if (m) {
+          const count = parseInt(m[1], 10);
+          if (!isNaN(count) && count >= 0) {
+            const accountId = (window as any).OWA_ACCOUNT_ID || (typeof window !== 'undefined' && window.name);
+            try { if (accountId) ipcRenderer.send('webview:unread-count', accountId, count); } catch {}
+            try { ipcRenderer.sendToHost('unread-count', { accountId, count }); } catch {}
+            try {
+              if (typeof window !== 'undefined' && window.parent && accountId) {
+                window.parent.postMessage({ type: 'webview-message', channel: 'unread-count', data: count, accountId }, '*');
+              }
+            } catch {}
+            console.log(`⚡ Title observer detected unread count: ${count}`);
+          }
+        }
+      });
+      titleObserver.observe(titleEl, { childList: true, characterData: true, subtree: true });
+      console.log('✅ Title MutationObserver installed for instant unread detection');
+    }
+  } catch (e) {
+    console.warn('Failed to install title observer:', e);
+  }
+
+  // Fallback DOM-based check every 30s (in case title doesn't reflect unread count)
+  setInterval(detectUnreadCount, 30000);
 
   // Initial check after 5 seconds
   setTimeout(detectUnreadCount, 5000);
@@ -574,3 +748,4 @@ window.addEventListener('load', (event) => {
 }, true);
 
 console.log('✅ Minimal preload script ready');
+}
