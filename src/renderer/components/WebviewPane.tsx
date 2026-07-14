@@ -519,6 +519,7 @@ const WebviewPane: React.FC<WebviewPaneProps> = ({ account, isActive }) => {
         }
         className="w-full h-full flex-1"
         data-account-id={account.id} // Add data attribute for easier selection
+        name={account.id} // Pass account ID through name attribute to ensure reliable retrieval in preload
       />
     </div>
   );

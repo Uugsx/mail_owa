@@ -22,10 +22,16 @@ try {
 
 // Receive accountId from host renderer and expose it for message posts
 try {
+  // Synchronously initialize OWA_ACCOUNT_ID from window.name (prevents race conditions and persists across navigations)
+  if (typeof window !== 'undefined' && window.name) {
+    (window as any).OWA_ACCOUNT_ID = window.name;
+    console.log('✅ Account ID synchronously initialized from window.name:', window.name);
+  }
+
   ipcRenderer.on('set-account-id', (_event, accountId: string) => {
     try {
       (window as any).OWA_ACCOUNT_ID = accountId;
-      console.log('✅ Account ID received in preload:', accountId);
+      console.log('✅ Account ID received in preload via IPC:', accountId);
     } catch {}
   });
 } catch {}
@@ -188,7 +194,7 @@ function detectUnreadCount(): void {
 
     console.log(`📤 Final unread count detected: ${unreadCount}`);
     
-    const accountId = (window as any).OWA_ACCOUNT_ID;
+    const accountId = (window as any).OWA_ACCOUNT_ID || (typeof window !== 'undefined' && window.name);
     try {
       if (accountId) {
         ipcRenderer.send('webview:unread-count', accountId, unreadCount);
