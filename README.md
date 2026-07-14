@@ -33,39 +33,37 @@
     *   `Cmd+W`: Close window (runs securely in the background menu bar).
     *   `Cmd+Q`: Safely quit application.
 
+### 📥 Installation
+
+Simply download the latest ready-to-use version of the app:
+1. Go to the [Releases](https://github.com/Uugsx/mail_owa/releases) page.
+2. Download the `.dmg` file for your macOS architecture.
+3. Open the `.dmg` file and drag **OWA Accounts** to your **Applications** folder.
+
 ---
 
-### 🚀 Getting Started
+### 🛠️ Development & Building from Source
+
+If you want to run the project in development mode or build it yourself:
 
 #### Prerequisites
 *   **Node.js** (v18.0.0 or higher recommended)
 *   **npm** (v9.0.0 or higher)
 
-#### Installation & Development
-1.  **Clone the repository:**
-    ```bash
-    git clone https://github.com/YOUR_USERNAME/mail_owa.git
-    cd mail_owa
-    ```
-2.  **Install dependencies:**
-    ```bash
-    npm install
-    ```
-3.  **Run in development mode:**
-    ```bash
-    npm run dev
-    ```
-
-#### Building the Application
-To build a standalone production bundle for macOS:
+#### Run in Development Mode
 ```bash
-# Build production bundle
-npm run build
+git clone https://github.com/Uugsx/mail_owa.git
+cd mail_owa
+npm install
+npm run dev
+```
 
-# Package for macOS (creates a universal dmg file)
+#### Build Your Own DMG
+```bash
+npm run build
 npm run build:mac
 ```
-The packaged application will be generated in the `./dist-electron` folder.
+The compiled app will be in the `./dist-electron` folder.
 
 ---
 
@@ -96,9 +94,18 @@ The packaged application will be generated in the `./dist-electron` folder.
     *   `Cmd+W` — Свернуть окно в трей (продолжает работать в фоне).
     *   `Cmd+Q` — Полный выход из приложения.
 
+### 📥 Установка
+
+Для обычных пользователей доступна готовая сборка:
+1. Перейдите в раздел [Releases](https://github.com/Uugsx/mail_owa/releases).
+2. Скачайте файл `.dmg` для вашей версии macOS.
+3. Откройте скачанный `.dmg` и перетащите иконку **OWA Accounts** в папку **Программы** (Applications).
+
 ---
 
-### 🚀 Инструкция по установке и сборке
+### 🛠️ Разработка и сборка из исходников
+
+Если вы хотите запустить проект в режиме разработки или собрать его самостоятельно:
 
 #### Требования
 *   **Node.js** (версии 18.0.0 или выше)
