@@ -420,6 +420,7 @@ let hasRequestedCredentials = false;
 let savedCredentials: { username?: string, password?: string } | null = null;
 let hasSubmittedUsername = false;
 let hasSubmittedPassword = false;
+let fillIntervalId: any = null;
 
 // Helper to submit via selector lists or text matching
 function attemptSubmit(type: 'username' | 'password'): boolean {
@@ -495,11 +496,29 @@ function enhancedPasswordFill(): void {
       }
 
       // 2. Periodic check for input fields or account choosers (since SPAs render dynamically)
-      const fillInterval = setInterval(() => {
+      if (fillIntervalId) clearInterval(fillIntervalId);
+      fillIntervalId = setInterval(() => {
+        // Check for login errors to prevent infinite submission loops
+        const currentBodyText = document.body ? document.body.textContent || '' : '';
+        const hasLoginError = 
+          currentBodyText.includes('Введено неправильное имя') ||
+          currentBodyText.includes('неправильный пароль') ||
+          currentBodyText.includes('неверный пароль') ||
+          currentBodyText.includes('неверные данные') ||
+          currentBodyText.includes('Incorrect username or password') ||
+          currentBodyText.includes('The username or password you entered is incorrect') ||
+          document.querySelector('#lnkLgErr') !== null ||
+          document.querySelector('#signInError') !== null ||
+          document.querySelector('.signInError') !== null ||
+          document.querySelector('.error-message') !== null ||
+          document.querySelector('[role="alert"]') !== null;
+
         if (!savedCredentials) return; // Wait until credentials are received
 
         const { password, username } = savedCredentials;
         const usernameLocal = username ? username.split('@')[0].toLowerCase() : '';
+
+        let didChangeVal = false;
 
         // 0. Click account chooser item if visible
         const pageText = document.body.textContent || '';
@@ -517,20 +536,24 @@ function enhancedPasswordFill(): void {
 
                 (clickable as HTMLElement).click();
                 console.log('✅ Clicked account chooser via exact text match:', usernameLocal);
-                clearInterval(fillInterval); // Stop interval on successful chooser click
+                if (fillIntervalId) {
+                  clearInterval(fillIntervalId);
+                  fillIntervalId = null;
+                }
                 return;
               }
             }
           }
         }
 
-        // 1. Fill username and submit
+        // 1. Fill username
         if (username) {
           const usernameFields = document.querySelectorAll('input[type="email"], input[name*="user"], input[name*="login"], input[placeholder*="login"], input[id*="login"], #passp-field-login, #identifierId');
           usernameFields.forEach(field => {
             if (field instanceof HTMLInputElement && field.offsetParent !== null) { // visible
-              // If the field is empty, fill it first
-              if (!field.value) {
+              const currentVal = field.value || '';
+              // If the field is empty or contains an incorrect/old username, overwrite it
+              if (!currentVal || (currentVal.toLowerCase() !== username.toLowerCase() && currentVal.toLowerCase() !== usernameLocal)) {
                 // Ignore OTP/verification code fields
                 const name = (field.name || '').toLowerCase();
                 const id = (field.id || '').toLowerCase();
@@ -550,10 +573,44 @@ function enhancedPasswordFill(): void {
                 field.value = username;
                 field.dispatchEvent(new Event('input', { bubbles: true }));
                 field.dispatchEvent(new Event('change', { bubbles: true }));
-                console.log('✅ Username auto-filled');
+                console.log('✅ Username auto-filled:', username);
+                didChangeVal = true;
               }
+            }
+          });
+        }
 
-              // If the field has a value (either pre-filled or filled by us), auto-submit
+        // 2. Fill password
+        if (password) {
+          const passwordFields = document.querySelectorAll('input[type="password"]');
+          passwordFields.forEach(field => {
+            if (field instanceof HTMLInputElement && field.offsetParent !== null) { // visible
+              if (!field.value || field.value !== password) {
+                field.value = password;
+                field.dispatchEvent(new Event('input', { bubbles: true }));
+                field.dispatchEvent(new Event('change', { bubbles: true }));
+                console.log('✅ Password auto-filled');
+                didChangeVal = true;
+              }
+            }
+          });
+        }
+
+        // Stop auto-submit if error exists and we didn't just change the values
+        if (hasLoginError && !didChangeVal) {
+          console.log('⚠️ Login error with current credentials. Stopping auto-submit loop.');
+          if (fillIntervalId) {
+            clearInterval(fillIntervalId);
+            fillIntervalId = null;
+          }
+          return;
+        }
+
+        // 3. Auto-submit username
+        if (username) {
+          const usernameFields = document.querySelectorAll('input[type="email"], input[name*="user"], input[name*="login"], input[placeholder*="login"], input[id*="login"], #passp-field-login, #identifierId');
+          usernameFields.forEach(field => {
+            if (field instanceof HTMLInputElement && field.offsetParent !== null) {
               if (field.value && field.value.toLowerCase().includes(usernameLocal)) {
                 if (hasSubmittedUsername) return;
                 hasSubmittedUsername = true;
@@ -566,18 +623,11 @@ function enhancedPasswordFill(): void {
           });
         }
 
-        // 2. Fill password and submit
+        // 4. Auto-submit password
         if (password) {
           const passwordFields = document.querySelectorAll('input[type="password"]');
           passwordFields.forEach(field => {
-            if (field instanceof HTMLInputElement && field.offsetParent !== null) { // visible
-              if (!field.value) {
-                field.value = password;
-                field.dispatchEvent(new Event('input', { bubbles: true }));
-                field.dispatchEvent(new Event('change', { bubbles: true }));
-                console.log('✅ Password auto-filled');
-              }
-
+            if (field instanceof HTMLInputElement && field.offsetParent !== null) {
               if (field.value) {
                 if (hasSubmittedPassword) return;
                 hasSubmittedPassword = true;
@@ -592,17 +642,34 @@ function enhancedPasswordFill(): void {
       }, 1000);
 
       // Stop interval after 45 seconds to save CPU
-      setTimeout(() => clearInterval(fillInterval), 45000);
+      setTimeout(() => {
+        if (fillIntervalId) {
+          clearInterval(fillIntervalId);
+          fillIntervalId = null;
+        }
+      }, 45000);
     }
   } catch (error) {
     console.warn('Enhanced password fill failed:', error);
   }
 }
 
-// Listen for password and username from parent
 ipcRenderer.on('password-fill-enhanced', (_event, data) => {
   savedCredentials = data || {};
-  console.log('🔑 Credentials received from host');
+  console.log('🔑 Credentials received/updated from host:', savedCredentials.username);
+  
+  // If we receive new credentials, reset the submission flags to attempt logging in again
+  hasSubmittedUsername = false;
+  hasSubmittedPassword = false;
+  
+  // Clear any existing interval before starting a new one
+  if (fillIntervalId) {
+    clearInterval(fillIntervalId);
+    fillIntervalId = null;
+  }
+  
+  // Restart autofill with new credentials
+  enhancedPasswordFill();
 });
 
 // Suppress SSL error console messages (they still happen but don't spam the console)

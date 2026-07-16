@@ -33,12 +33,7 @@ function saveAllSessions(): Promise<void> {
           const url = new URL(account.loginUrl);
           const domain = url.hostname;
           
-          let partitionName: string;
-          if (domain.includes('smartds.ru') || domain.includes('company.com')) {
-            partitionName = domain.includes('smartds.ru') ? 'persist:smartds-shared' : 'persist:company-shared';
-          } else {
-            partitionName = `persist:owa-${account.id}`;
-          }
+          const partitionName = `persist:owa-${account.id}`;
           
           const ses = session.fromPartition(partitionName);
           
@@ -126,12 +121,7 @@ function initializeSessions(): Promise<void> {
           const url = new URL(account.loginUrl);
           const domain = url.hostname;
           
-          let partitionName: string;
-          if (domain.includes('smartds.ru') || domain.includes('company.com')) {
-            partitionName = domain.includes('smartds.ru') ? 'persist:smartds-shared' : 'persist:company-shared';
-          } else {
-            partitionName = `persist:owa-${account.id}`;
-          }
+          const partitionName = `persist:owa-${account.id}`;
           
           console.log(`Setting up session for ${account.displayName} with partition: ${partitionName}`);
           

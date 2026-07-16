@@ -72,28 +72,9 @@ const WebviewPane: React.FC<WebviewPaneProps> = ({ account, isActive }) => {
   const [errorMessage, setErrorMessage] = useState('');
   const [isReady, setIsReady] = useState(false);
 
-  // Generate partition name - use shared partition for same domain
+  // Generate partition name - isolate each account to its own partition
   const getPartitionName = (account: AccountMeta): string => {
-    try {
-      const url = new URL(account.loginUrl);
-      const domain = url.hostname;
-      
-      // For smartds.ru domain, use shared partition to allow session sharing
-      if (domain.includes('smartds.ru')) {
-        return 'persist:smartds-shared';
-      }
-      
-      // For company.com domain, use shared partition to allow session sharing
-      if (domain.includes('company.com')) {
-        return 'persist:company-shared';
-      }
-      
-      // For other domains, use isolated partitions
-      return `persist:owa-${account.id}`;
-    } catch {
-      // Fallback to isolated partition if URL parsing fails
-      return `persist:owa-${account.id}`;
-    }
+    return `persist:owa-${account.id}`;
   };
 
   const partitionName = getPartitionName(account);
@@ -381,6 +362,21 @@ const WebviewPane: React.FC<WebviewPaneProps> = ({ account, isActive }) => {
       }
     }
   }, [webviewEl, isActive]);
+
+  // Sync credentials with the webview when they change
+  useEffect(() => {
+    if (webviewEl && isReady) {
+      console.log(`📨 Syncing credentials to webview for ${account.displayName}: ${account.username}`);
+      try {
+        webviewEl.send('password-fill-enhanced', {
+          username: account.username,
+          password: account.password
+        });
+      } catch (err) {
+        console.warn('Failed to sync updated credentials to webview:', err);
+      }
+    }
+  }, [webviewEl, isReady, account.username, account.password]);
 
   const handleRetry = () => {
     try {
