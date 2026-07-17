@@ -73,6 +73,7 @@ export interface PreloadAPI {
     getInitialTheme: () => Promise<boolean>;
     getInitialThemeSync: () => boolean;
     playSystemSound: (soundName: string) => Promise<void>;
+    clearSessionStorage: (accountId: string) => Promise<boolean>;
   };
 }
 

@@ -378,11 +378,14 @@ const WebviewPane: React.FC<WebviewPaneProps> = ({ account, isActive }) => {
     }
   }, [webviewEl, isReady, account.username, account.password]);
 
-  const handleRetry = () => {
+  const handleRetry = async () => {
     try {
       if (webviewEl) {
         setHasError(false);
         setErrorMessage('');
+        setIsLoading(true);
+        // Clear all storage, cookies, and cache for this account partition to resolve redirect loops
+        await window.electronAPI?.app?.clearSessionStorage?.(account.id);
         webviewEl.reload();
       }
     } catch (error) {

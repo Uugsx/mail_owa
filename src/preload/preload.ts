@@ -41,6 +41,7 @@ const electronAPI: PreloadAPI = {
     getInitialThemeSync: () => ipcRenderer.sendSync('app:get-initial-theme-sync'),
     getDarkReaderSource: () => ipcRenderer.invoke('app:get-darkreader-source'),
     playSystemSound: (soundName) => ipcRenderer.invoke('app:play-system-sound', soundName),
+    clearSessionStorage: (accountId) => ipcRenderer.invoke('session:clear-storage', accountId),
   },
 };
 

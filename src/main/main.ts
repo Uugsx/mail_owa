@@ -183,8 +183,8 @@ function initializeSessions(): Promise<void> {
               domain.includes('live.com') || 
               domain.includes('outlook.com');
 
-            if (!isPublicMail) {
-              // Add essential browser-like headers only for custom Exchange OWA
+            if (!isPublicMail && (details.resourceType === 'mainFrame' || details.resourceType === 'subFrame')) {
+              // Add essential browser-like headers only for custom Exchange OWA page loads
               details.requestHeaders['Accept-Language'] = 'en-US,en;q=0.9,ru;q=0.8';
               details.requestHeaders['Accept'] = 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8';
               details.requestHeaders['Cache-Control'] = 'max-age=0';
@@ -192,7 +192,7 @@ function initializeSessions(): Promise<void> {
             
             callback({ requestHeaders: details.requestHeaders });
           });
-          
+
           // Configure enhanced cookie and session persistence
           let lastCookieFlush = 0;
           ses.cookies.on('changed', (event, cookie, cause, removed) => {
@@ -208,7 +208,13 @@ function initializeSessions(): Promise<void> {
               cookie.domain?.includes('smartds.ru') ||
               cookie.domain?.includes('company.com');
 
-            if (cookie.session && isTargetDomain) {
+            // Do NOT promote temporary authentication form data or tests to persistent cookies
+            const isIgnoredCookie = 
+              cookie.name.startsWith('cadata') || 
+              cookie.name === 'cookieTest' || 
+              cookie.name === 'PBack';
+
+            if (cookie.session && isTargetDomain && !isIgnoredCookie) {
               const protocol = cookie.secure ? 'https:' : 'http:';
               const cleanDomain = cookie.domain.startsWith('.') ? cookie.domain.substring(1) : cookie.domain;
               const cookieUrl = `${protocol}//${cleanDomain}${cookie.path}`;
@@ -245,12 +251,6 @@ function initializeSessions(): Promise<void> {
             console.warn('Protocol registration failed (non-critical):', (error as Error).message);
           }
           
-          // Set session to persist cookies and local storage
-          ses.webRequest.onBeforeSendHeaders((details, callback) => {
-            // Ensure cookies are always sent
-            callback({ requestHeaders: details.requestHeaders });
-          });
-          
           // Configure session storage settings for better authentication persistence
           ses.setSpellCheckerEnabled(false); // Disable spell checker to improve performance
           ses.setPreloads([]); // Clear preloads to avoid conflicts
@@ -274,6 +274,24 @@ function initializeSessions(): Promise<void> {
               );
               
               console.log(`🔍 All cookies for ${account.displayName}:`, cookies.map(c => `${c.name}=${c.value?.substring(0, 20)}...`));
+
+              // Clean up any stale persisted session cookies that might cause redirect loops
+              cookies.forEach(cookie => {
+                const isBadPersistedCookie = 
+                  !cookie.session && (
+                    cookie.name.startsWith('cadata') ||
+                    cookie.name === 'cookieTest' ||
+                    cookie.name === 'PBack'
+                  );
+                if (isBadPersistedCookie) {
+                  const protocol = cookie.secure ? 'https:' : 'http:';
+                  const cleanDomain = cookie.domain.startsWith('.') ? cookie.domain.substring(1) : cookie.domain;
+                  const cookieUrl = `${protocol}//${cleanDomain}${cookie.path}`;
+                  ses.cookies.remove(cookieUrl, cookie.name).then(() => {
+                    console.log(`🧹 Cleaned stale persisted session cookie: ${cookie.name} for ${account.displayName}`);
+                  }).catch(() => {});
+                }
+              });
               
               if (authCookies.length > 0) {
                 console.log(`🍪 Found ${authCookies.length} existing auth cookies for ${account.displayName}:`);
@@ -560,6 +578,19 @@ ipcMain.handle('accounts:setActive', (_, accountId: string) => {
     mainWindow.webContents.send('switch-account', accountId);
   }
   return true;
+});
+
+ipcMain.handle('session:clear-storage', async (_, accountId: string) => {
+  try {
+    const partitionName = `persist:owa-${accountId}`;
+    const ses = session.fromPartition(partitionName);
+    await ses.clearStorageData();
+    console.log(`🧹 Fully cleared storage, cache, and cookies for account partition: ${partitionName}`);
+    return true;
+  } catch (err) {
+    console.error(`Failed to clear storage for account ${accountId}:`, err);
+    return false;
+  }
 });
 
 ipcMain.handle('app:get-state', () => {
